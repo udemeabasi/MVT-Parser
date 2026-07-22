@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MVT Message Parser</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --forest: #14532d;
+    --forest-dark: #0d3d20;
+    --orange: #e0692a;
+    --cream: #faf9f6;
+    --ink: #1c1f1d;
+    --line: #dcd8ce;
+    --mono: 'IBM Plex Mono', 'Courier New', monospace;
+    --sans: 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--cream);
+    font-family:var(--sans);
+    color:var(--ink);
+  }
+  header{
+    background:var(--forest);
+    color:#fff;
+    padding:22px 32px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    border-bottom:4px solid var(--orange);
+  }
+  header h1{
+    margin:0;
+    font-size:20px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    font-weight:700;
+  }
+  header span{
+    font-size:12px;
+    color:#cfe3d5;
+    letter-spacing:0.04em;
+  }
+  main{
+    max-width:1200px;
+    margin:0 auto;
+    padding:28px 32px 60px;
+  }
+  .panel{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:20px;
+    margin-bottom:22px;
+  }
+  .panel-label{
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--forest);
+    margin:0 0 10px;
+  }
+  textarea{
+    width:100%;
+    min-height:220px;
+    resize:vertical;
+    font-family:var(--mono);
+    font-size:13.5px;
+    line-height:1.6;
+    padding:14px 16px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    background:#fcfcfa;
+    color:var(--ink);
+    white-space:pre;
+  }
+  textarea:focus{
+    outline:none;
+    border-color:var(--orange);
+    box-shadow:0 0 0 3px rgba(224,105,42,0.12);
+  }
+  .actions{
+    display:flex;
+    gap:10px;
+    margin-top:14px;
+    flex-wrap:wrap;
+  }
+  button{
+    font-family:var(--sans);
+    font-size:13px;
+    font-weight:600;
+    padding:10px 18px;
+    border-radius:4px;
+    border:1px solid transparent;
+    cursor:pointer;
+    transition:background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .btn-primary{
+    background:var(--orange);
+    color:#fff;
+  }
+  .btn-primary:hover{background:#c8571e;}
+  .btn-secondary{
+    background:#fff;
+    color:var(--forest);
+    border-color:var(--forest);
+  }
+  .btn-secondary:hover{background:var(--forest);color:#fff;}
+  .btn-ghost{
+    background:transparent;
+    color:#8a8577;
+    border-color:var(--line);
+  }
+  .btn-ghost:hover{border-color:#8a8577;color:var(--ink);}
+  .table-wrap{
+    overflow-x:auto;
+    border:1px solid var(--line);
+    border-radius:6px;
+  }
+  table{
+    border-collapse:collapse;
+    width:100%;
+    min-width:1300px;
+    font-size:12.5px;
+    background:#fff;
+  }
+  thead th{
+    background:var(--forest-dark);
+    color:#fff;
+    text-align:left;
+    padding:10px 12px;
+    font-size:10.5px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    white-space:nowrap;
+    position:sticky;
+    top:0;
+  }
+  tbody td{
+    padding:9px 12px;
+    border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
+  tbody tr:nth-child(even){background:#faf8f4;}
+  tbody tr:hover{background:#fdf1e9;}
+  td.empty-cell{color:#b9b4a6;}
+  .row-actions button{
+    padding:4px 10px;
+    font-size:11px;
+    font-weight:600;
+  }
+  .empty-state{
+    padding:34px;
+    text-align:center;
+    color:#8a8577;
+    font-size:13px;
+  }
+  .status{
+    font-size:12px;
+    margin-top:10px;
+    color:var(--forest);
+    font-weight:600;
+    min-height:16px;
+  }
+  .status.error{color:#b3261e;}
+  .count-pill{
+    display:inline-block;
+    background:var(--orange);
+    color:#fff;
+    font-size:11px;
+    font-weight:700;
+    padding:2px 9px;
+    border-radius:20px;
+    margin-left:8px;
+  }
+  .summary-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px;
+    margin:16px 0 18px;
+  }
+  .stat-card{
+    flex:1;
+    min-width:130px;
+    background:#faf8f4;
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:12px 14px;
+  }
+  .stat-value{
+    font-size:24px;
+    font-weight:700;
+    color:var(--forest);
+    line-height:1.1;
+  }
+  .stat-label{
+    font-size:11px;
+    font-weight:600;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    color:#8a8577;
+    margin-top:4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MVT Message Parser</h1>
+  <span>Paste &rarr; Extract &rarr; Export</span>
+</header>
+
+<main>
+
+  <div class="panel">
+    <p class="panel-label">Paste MVT message(s)</p>
+    <textarea id="msgInput" placeholder="Paste one or more raw MVT WhatsApp messages here — pasting several one after another is fine, e.g.
+
+MVT
+IAN521 260420 5N-BXP
+ABV-QUO
+C/O: 0858z
+....
+
+MVT
+IAN522 260420 5N-BWK
+QUO-ABV
+...."></textarea>
+    <div class="actions">
+      <button class="btn-primary" onclick="handleExtract()">Extract to table</button>
+      <button class="btn-ghost" onclick="document.getElementById('msgInput').value=''">Clear message</button>
+    </div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-label" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <span>Extracted records <span class="count-pill" id="countPill">0</span></span>
+      <span style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:normal;font-weight:600;font-size:12.5px;color:var(--ink);flex-wrap:wrap;">
+        Filter by date:
+        <input type="date" id="startDate" onchange="renderTable()" style="font-family:var(--sans);font-size:12.5px;padding:5px 8px;border:1px solid var(--line);border-radius:4px;background:#fff;color:var(--ink);">
+        <span style="color:var(--line);">to</span>
+        <input type="date" id="endDate" onchange="renderTable()" style="font-family:var(--sans);font-size:12.5px;padding:5px 8px;border:1px solid var(--line);border-radius:4px;background:#fff;color:var(--ink);">
+        <button class="btn-ghost" style="padding:5px 12px;font-size:11px;" onclick="document.getElementById('startDate').value='';document.getElementById('endDate').value='';renderTable();">Clear filter</button>
+      </span>
+    </div>
+
+    <div id="summaryRow" class="summary-row"></div>
+
+    <div class="table-wrap">
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th>Flight No</th>
+            <th>Date</th>
+            <th>Aircraft</th>
+            <th>Origin</th>
+            <th>Destination</th>
+            <th>STD</th>
+            <th>Chocks Off</th>
+            <th>Chocks On</th>
+            <th>Flown</th>
+            <th>Premium</th>
+            <th>Economy</th>
+            <th>Infant</th>
+            <th>Jump Seat</th>
+            <th>Delay</th>
+            <th>Further Delay</th>
+            <th>Cargo</th>
+            <th>Ferry</th>
+            <th>Charter</th>
+            <th>Cabin Info</th>
+            <th>Remarks</th>
+            <th>Correction</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+    </div>
+    <div id="emptyState" class="empty-state">No messages extracted yet. Paste a message above and click "Extract to table".</div>
+    <div class="actions">
+      <button class="btn-secondary" onclick="exportExcel()">Download Excel</button>
+      <button class="btn-ghost" onclick="clearAll()">Clear table</button>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const records = [];
+let nextRecordId = 1;
+const headers = ['flightNo','date','aircraft','origin','destination','std','chocksOff','chocksOn','flown','premium','economy','infant','jumpSeat','delay','furtherDelay','cargo','ferry','charter','cabinInfo','remarks','correction'];
+const headerLabels = ['Flight No','Date','Aircraft','Origin','Destination','STD','Chocks Off','Chocks On','Flown','Premium','Economy','Infant','Jump Seat','Delay','Further Delay','Cargo','Ferry','Charter','Cabin Info','Remarks','Correction'];
+// Fields that identify "the same flight" across multiple messages (initial MVT, actual-time update, correction, etc.)
+const keyFields = ['flightNo','date','aircraft','origin','destination'];
+
+function stripInvisible(str){
+  return str.replace(/[\u200e\u200f\u200b\ufeff]/g, '');
+}
+
+// Splits pasted text into individual flight entries.
+//
+// A blank line is only treated as the start of a NEW message if the very next
+// line looks like a real message header — "MVT", a lone "CORR", or a
+// flight/date/aircraft line (e.g. "IAN502 260721 5N-BXP"). If a blank-line
+// paragraph starts with anything else (like a continuation field such as
+// "C/O:" or "SI:"), it's merged back into the message currently being built,
+// since real MVT messages often get extra blank lines inserted when they wrap
+// or get copied from WhatsApp. This lets a single message stay intact despite
+// internal blank lines, while a truly separate message (a new flight line, or
+// text with no MVT header at all) still gets split off and — if it has no
+// "MVT" anywhere — dropped entirely.
+function splitMessages(raw){
+  const clean = stripInvisible(raw);
+  const flightLineRe = /^[A-Za-z]{2,4}\d{2,5}\s+\d{6}\s+\S+/;
+  const isNewMessageStart = (line) =>
+    /^CORR$/i.test(line) || /^MVT\b/i.test(line) || flightLineRe.test(line);
+
+  // Step 1: group blank-line-separated paragraphs back into whole messages
+  const paragraphs = clean
+    .split(/\n\s*\n/)
+    .map(p => p.split('\n').map(l => l.trim()).filter(l => l.length > 0))
+    .filter(p => p.length > 0);
+
+  const messages = [];
+  let current = null;
+  for (const para of paragraphs){
+    if (isNewMessageStart(para[0])){
+      if (current) messages.push(current);
+      current = [...para];
+    } else if (current){
+      current.push(...para);
+    }
+    // else: stray paragraph before any recognizable message start — dropped
+  }
+  if (current) messages.push(current);
+
+  // Step 2: for each whole message, ignore it unless it mentions "MVT"
+  // anywhere, then sub-split on the flight line to handle several flights
+  // sharing one "MVT" header
+  const chunks = [];
+  for (const msgLines of messages){
+    let lines = msgLines;
+    if (!lines.some(l => /\bMVT\b/i.test(l))) continue;
+
+    let pendingCorr = false;
+    if (/^CORR$/i.test(lines[0])){
+      pendingCorr = true;
+      lines = lines.slice(1);
+    }
+
+    lines = lines.map(l => l.replace(/^MVT\s*/i, '').trim()).filter(l => l.length > 0);
+
+    let cur = null;
+    const pushCur = () => { if (cur && cur.lines.length) chunks.push(cur); };
+
+    for (const line of lines){
+      if (/^CORR$/i.test(line)){
+        pushCur();
+        cur = null;
+        pendingCorr = true;
+        continue;
+      }
+      if (flightLineRe.test(line)){
+        pushCur();
+        cur = { lines: [line], isCorr: pendingCorr };
+        pendingCorr = false;
+        continue;
+      }
+      if (!cur){
+        cur = { lines: [], isCorr: pendingCorr };
+        pendingCorr = false;
+      }
+      cur.lines.push(line);
+    }
+    pushCur();
+  }
+
+  return chunks.map(c => ({ text: c.lines.join('\n'), isCorr: c.isCorr }));
+}
+
+function parseMVT(raw, isCorr){
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+  const data = {
+    flightNo:'', date:'', aircraft:'', origin:'', destination:'', std:'',
+    chocksOff:'', chocksOn:'', flown:'', premium:'', economy:'', infant:'', jumpSeat:'',
+    delay:'', furtherDelay:'', cargo:'', ferry:'', charter:'', cabinInfo:'', remarks:''
+  };
+  const remarks = [];
+  const corrections = [];
+
+  for (const line of lines){
+    let m;
+
+    // FLIGHT NO / DATE / AIRCRAFT  e.g. "IAN521 260420 5N-BXP"
+    if ((m = line.match(/^([A-Za-z]{2,4})(\d{2,5})\s+(\d{6})\s+(\S+)/))){
+      data.flightNo = m[2];
+      const yy = m[3].slice(0,2), mo = m[3].slice(2,4), dd = m[3].slice(4,6);
+      data.date = `${dd}-${mo}-20${yy}`;
+      data.aircraft = m[4];
+      continue;
+    }
+
+    // ORIGIN-DESTINATION, optionally with STD  e.g. "ABV-QUO" or "ABV-QUO (0900z)"
+    if ((m = line.match(/^([A-Za-z]{3})-([A-Za-z]{3})(?:\s*\((\d{4})z?\))?$/))){
+      data.origin = m[1].toUpperCase();
+      data.destination = m[2].toUpperCase();
+      if (m[3]) data.std = `${m[3].slice(0,2)}:${m[3].slice(2,4)}`;
+      continue;
+    }
+
+    // Actual-time update line, e.g. "AA1902/1908z", "AA 0808/0813z", or the
+    // minutes-only shorthand "AA0808/16z" (hour carried over from the first time)
+    if ((m = line.match(/^[A-Za-z]{1,4}\s*(\d{4})\/(\d{2,4})z?$/))){
+      const first = m[1];
+      const second = m[2];
+      if (second.length === 4){
+        data.chocksOn = `${second.slice(0,2)}:${second.slice(2,4)}`;
+      } else {
+        data.chocksOn = `${first.slice(0,2)}:${second}`;
+      }
+      if (isCorr) corrections.push(line);
+      continue;
+    }
+
+    // CHOCKS OFF explicit  e.g. "C/O: 0858z"
+    if ((m = line.match(/^C\/O:\s*(\d{2})(\d{2})/i))){
+      data.chocksOff = `${m[1]}:${m[2]}`;
+      if (isCorr) corrections.push(line);
+      continue;
+    }
+
+    // PAX  e.g. "PAX: (90) 08/82+02INF" or "PAX: (91) 05/82+04INF+1JMP"
+    if ((m = line.match(/^PAX:\s*\((\d+)\)\s*(?:(\d+)\/(\d+))?/i))){
+      data.flown = m[1] || '';
+      data.premium = m[2] || '';
+      data.economy = m[3] || '';
+      const infMatch = line.match(/\+?\s*(\d+)\s*INF/i);
+      data.infant = infMatch ? infMatch[1] : '';
+      const jmpMatch = line.match(/\+?\s*(\d+)\s*JMP/i);
+      data.jumpSeat = jmpMatch ? jmpMatch[1] : '';
+      if (isCorr) corrections.push(line);
+      continue;
+    }
+
+    // FURTHER DELAY  (check before DLY since "F.DLY" contains "DLY") -> capture
+    // everything after "F.DLY:"
+    if ((m = line.match(/^F\.?\s*DLY:\s*(.+)/i))){
+      data.furtherDelay = m[1].trim();
+      if (isCorr) corrections.push(line);
+      continue;
+    }
+
+    // DELAY  e.g. "DLY: (PS ) PAX CONVENIENCE" -> capture everything after "DLY:"
+    if ((m = line.match(/^DLY:\s*(.+)/i))){
+      data.delay = m[1].trim();
+      if (isCorr) corrections.push(line);
+      continue;
+    }
+
+    // CARGO  e.g. "CGO:AFT:8PCS:67KG" -> "8/67" (pieces/weight in kg)
+    if ((m = line.match(/^CGO:\s*(.+)/i))){
+      const cargoText = m[1].trim();
+      if (/^NIL$/i.test(cargoText)){
+        data.cargo = 'NIL';
+      } else {
+        const pcsMatch = cargoText.match(/(\d+)\s*PCS/i);
+        const kgMatch = cargoText.match(/(\d+)\s*KG/i);
+        data.cargo = (pcsMatch || kgMatch)
+          ? `${pcsMatch ? pcsMatch[1] : ''}/${kgMatch ? kgMatch[1] : ''}`
+          : cargoText;
+      }
+      if (isCorr) corrections.push(line);
+      continue;
+    }
+
+    // "DELAYED AIRBORNE" status — capture it into Remarks wherever it appears
+    // in the message, regardless of what (if anything) prefixes the line
+    if (/DELAYED\s+AIRBORNE/i.test(line)){
+      const val = line.trim();
+      remarks.push(val);
+      if (isCorr) corrections.push(line);
+      continue;
+    }
+
+    // SI lines -> only FERRY / CHARTER are captured (even if extra text follows on
+    // the same line); any other SI content is ignored
+    if ((m = line.match(/^SI:\s*(.+)/i))){
+      const val = m[1].trim();
+      if (/^FERRY\b/i.test(val)) data.ferry = 'FERRY';
+      else if (/^CHARTER\b/i.test(val)) data.charter = 'CHARTER';
+      if (isCorr && (data.ferry || data.charter)) corrections.push(line);
+      continue;
+    }
+
+    // CABIN INFO  e.g. "CI: 4Y IN W"
+    if ((m = line.match(/^CI:\s*(.+)/i))){
+      data.cabinInfo = m[1].trim();
+      if (isCorr) corrections.push(line);
+      continue;
+    }
+
+    // Fields normally ignored (TXI, A/B, ETA, CREW) — but in a CORR message
+    // these represent the actual correction, so capture them instead of skipping.
+    if (/^(TXI|A\/B|ETA|CREW):/i.test(line)){
+      if (isCorr) corrections.push(line);
+      continue;
+    }
+
+    // Anything else is unrecognized noise (or, in a CORR message, the correction
+    // itself). Unrecognized lines are dropped entirely — Remarks is reserved
+    // only for the "DELAYED AIRBORNE" capture above.
+    if (isCorr) corrections.push(line);
+  }
+
+  data.remarks = remarks.join('; ');
+  data.correction = corrections.join('; ');
+
+  if (!data.flightNo){
+    return { error: 'Could not find a Flight No / Date / Aircraft line in this message segment.' };
+  }
+
+  return { data, isCorr };
+}
+
+// Finds an existing row for the same flight (Flight No + Date + Aircraft + Origin + Destination)
+// and merges new fields into it; otherwise adds a new row. This is how a follow-up
+// "actual time" message or a CORR message lands on the same row as the original MVT.
+function mergeOrAddRecord(newData){
+  const idx = records.findIndex(r => keyFields.every(k => r[k] === newData[k] && r[k] !== ''));
+
+  if (idx === -1){
+    newData._id = nextRecordId++;
+    records.push(newData);
+    return { merged: false };
+  }
+
+  const existing = records[idx];
+  headers.forEach(h => {
+    if (h === 'correction' || h === 'remarks'){
+      if (newData[h]) existing[h] = existing[h] ? `${existing[h]}; ${newData[h]}` : newData[h];
+    } else if (newData[h]){
+      existing[h] = newData[h];
+    }
+  });
+  return { merged: true };
+}
+
+function handleExtract(){
+  const input = document.getElementById('msgInput').value;
+  const statusEl = document.getElementById('status');
+
+  if (!input.trim()){
+    statusEl.textContent = 'Paste a message first.';
+    statusEl.className = 'status error';
+    return;
+  }
+
+  // Nothing in the whole paste even mentions "MVT" — ignore it entirely
+  if (!/\bMVT\b/i.test(stripInvisible(input))){
+    statusEl.textContent = 'This does not contain "MVT" — nothing was extracted.';
+    statusEl.className = 'status error';
+    return;
+  }
+
+  const chunks = splitMessages(input);
+
+  let extracted = 0;
+  let updated = 0;
+  let corrected = 0;
+  let skipped = 0;
+  const skipReasons = [];
+
+  chunks.forEach((chunk, i) => {
+    try {
+      const result = parseMVT(chunk.text, chunk.isCorr);
+
+      if (result.error){
+        skipped++;
+        skipReasons.push(`Segment ${i + 1}: ${result.error}`);
+        return;
+      }
+
+      const { data, isCorr } = result;
+      const { merged } = mergeOrAddRecord(data);
+
+      if (isCorr) corrected++;
+      else if (merged) updated++;
+      else extracted++;
+    } catch (err){
+      // A single malformed message should never stop the rest of the batch
+      skipped++;
+      skipReasons.push(`Segment ${i + 1}: unexpected error — ${err.message}`);
+    }
+  });
+
+  renderTable();
+
+  const parts = [];
+  if (extracted) parts.push(`${extracted} new row${extracted > 1 ? 's' : ''} added`);
+  if (updated) parts.push(`${updated} row${updated > 1 ? 's' : ''} updated`);
+  if (corrected) parts.push(`${corrected} correction${corrected > 1 ? 's' : ''} applied`);
+  if (skipped) parts.push(`${skipped} segment${skipped > 1 ? 's' : ''} skipped (unrecognized)`);
+
+  statusEl.textContent = parts.length
+    ? `Processed ${chunks.length} flight segment${chunks.length > 1 ? 's' : ''}: ${parts.join(', ')}.`
+    : 'Nothing to process.';
+  statusEl.className = skipped && !extracted && !updated && !corrected ? 'status error' : 'status';
+}
+
+// Converts a stored "DD-MM-YYYY" date string into a real Date object for range comparisons
+function parseStoredDate(dateStr){
+  if (!dateStr) return null;
+  const [d, m, y] = dateStr.split('-').map(Number);
+  if (!d || !m || !y) return null;
+  return new Date(y, m - 1, d);
+}
+
+function getFilteredRecords(){
+  const startVal = document.getElementById('startDate').value; // "YYYY-MM-DD" or ''
+  const endVal = document.getElementById('endDate').value;
+  if (!startVal && !endVal) return records;
+
+  const start = startVal ? new Date(startVal + 'T00:00:00') : null;
+  const end = endVal ? new Date(endVal + 'T23:59:59') : null;
+
+  return records.filter(r => {
+    const d = parseStoredDate(r.date);
+    if (!d) return false;
+    if (start && d < start) return false;
+    if (end && d > end) return false;
+    return true;
+  });
+}
+
+function renderSummary(filtered){
+  const el = document.getElementById('summaryRow');
+  const toNum = v => {
+    const n = parseInt(v, 10);
+    return isNaN(n) ? 0 : n;
+  };
+
+  const flightCount = filtered.length;
+  const sumFlown = filtered.reduce((a, r) => a + toNum(r.flown), 0);
+  const sumPremium = filtered.reduce((a, r) => a + toNum(r.premium), 0);
+  const sumEconomy = filtered.reduce((a, r) => a + toNum(r.economy), 0);
+  const delayCount = filtered.filter(r => r.delay && r.delay.trim() !== '').length;
+
+  const stats = [
+    ['Number of Flights', flightCount],
+    ['Sum of Flown', sumFlown],
+    ['Sum of Premium', sumPremium],
+    ['Sum of Economy', sumEconomy],
+    ['Delay Count', delayCount]
+  ];
+
+  el.innerHTML = stats.map(s => `
+    <div class="stat-card">
+      <div class="stat-value">${s[1]}</div>
+      <div class="stat-label">${s[0]}</div>
+    </div>
+  `).join('');
+}
+
+function renderTable(){
+  const tbody = document.getElementById('resultsBody');
+  const emptyState = document.getElementById('emptyState');
+  const table = document.getElementById('resultsTable');
+  const countPill = document.getElementById('countPill');
+
+  const filtered = getFilteredRecords();
+  renderSummary(filtered);
+  tbody.innerHTML = '';
+  countPill.textContent = filtered.length === records.length
+    ? records.length
+    : `${filtered.length} of ${records.length}`;
+
+  if (filtered.length === 0){
+    table.style.display = 'none';
+    emptyState.style.display = 'block';
+    emptyState.textContent = records.length === 0
+      ? 'No messages extracted yet. Paste a message above and click "Extract to table".'
+      : 'No rows match the selected date range.';
+    return;
+  }
+  table.style.display = 'table';
+  emptyState.style.display = 'none';
+
+  filtered.forEach(rec => {
+    const tr = document.createElement('tr');
+    headers.forEach(key => {
+      const td = document.createElement('td');
+      const val = rec[key];
+      td.textContent = val || '';
+      if (!val) td.classList.add('empty-cell');
+      tr.appendChild(td);
+    });
+    const tdAction = document.createElement('td');
+    tdAction.className = 'row-actions';
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-ghost';
+    delBtn.textContent = 'Remove';
+    delBtn.onclick = () => {
+      const realIdx = records.findIndex(r => r._id === rec._id);
+      if (realIdx !== -1) records.splice(realIdx, 1);
+      renderTable();
+    };
+    tdAction.appendChild(delBtn);
+    tr.appendChild(tdAction);
+    tbody.appendChild(tr);
+  });
+}
+
+function clearAll(){
+  if (records.length && !confirm('Clear all extracted rows?')) return;
+  records.length = 0;
+  renderTable();
+  document.getElementById('status').textContent = '';
+}
+
+function exportExcel(){
+  const filtered = getFilteredRecords();
+  if (!filtered.length){
+    alert('No records to export yet.');
+    return;
+  }
+
+  const rows = filtered.map(rec => headers.map(h => rec[h] || ''));
+  const sheetData = [headerLabels, ...rows];
+
+  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+  // Reasonable column widths so text isn't clipped when opened in Excel
+  ws['!cols'] = headerLabels.map(label => ({ wch: Math.max(label.length + 2, 12) }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'MVT Extract');
+
+  const startVal = document.getElementById('startDate').value;
+  const endVal = document.getElementById('endDate').value;
+  const filterSuffix = (startVal || endVal) ? `_${startVal || 'start'}_to_${endVal || 'end'}` : '';
+  const filename = `mvt_extract${filterSuffix}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  XLSX.writeFile(wb, filename);
+}
+
+renderTable();
+</script>
+
+</body>
+</html>
